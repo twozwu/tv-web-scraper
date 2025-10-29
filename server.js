@@ -2,18 +2,40 @@ const PORT = 8000;
 import fetch from "node-fetch";
 import * as cheerio from "cheerio";
 import express from "express";
-import cors from 'cors'
-import morgan from 'morgan';
+import cors from "cors";
+import morgan from "morgan";
+import { chromium } from "playwright";
 const app = express();
-app.use(express.urlencoded({ extended: false }))
-app.use(express.json())
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 app.use(cors());
 app.use(morgan("tiny"));
 
-// const url = "http://web.niotv.com/NIO_2017_WEB/i_index.php?cont=day&grp_id=1&way=outter";
-
 app.get("/", function (req, res) {
-    res.json("This is my webscraper");
+  res.json("This is my webscraper");
+});
+
+app.get("/test", async function (req, res) {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+
+  // 前往目標網站
+  await page.goto("https://news.ycombinator.com/");
+
+  // 等待頁面載入完成（確保內容已渲染）
+  await page.waitForSelector(".athing");
+
+  // 擷取所有標題
+  const articles = await page.$$eval(".athing", (rows) =>
+    rows.map((row) => {
+      const title = row.querySelector(".titleline a")?.innerText ?? "";
+      const link = row.querySelector(".titleline a")?.href ?? "";
+      return { title, link };
+    })
+  );
+
+  await browser.close();
+  res.json(articles);
 });
 
 // 測試用(產生formData)
@@ -27,32 +49,56 @@ app.get("/", function (req, res) {
 // })
 
 app.post("/program-list", async (req, res) => {
-    // const formData = new URLSearchParams(req.body)
-    // console.log(req.body);
-    const url = `http://www.niotv.com/i_index.php?cont=day&ch_id=${req.body.sch_id}&chgrp_id=1`;
-    const response = await fetch(url, {
-        method: "POST",
-        body: req.body,
-    });
-    const html = await response.text();
+  try {
+    // console.log('Received request body:', req.body);
+
+    if (!req.body.sch_id) {
+      return res.status(400).json({ error: "Missing sch_id in request body" });
+    }
+
+    const url = `https://www.homeplus.net.tw/cable/product-introduce/digital-tv/digital-program-cont/209-${req.body.sch_id}`;
+
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    // 前往目標網站
+    await page.goto(url);
+
+    // 等待頁面載入完成（確保內容已渲染）
+    await page.waitForSelector(".channel_list");
+
+    const html = await page.content();
+
+    // 檢查是否有返回有效的 HTML 內容
+    if (!html) {
+      throw new Error("No content returned from the server");
+    }
 
     /** cheerio parse html */
     const $ = cheerio.load(html);
-    const results = { list: [] }; // 準備資料集空物件
-    const title = $(".ch_name_title > h2").text(); // 取得標題
-    results.title = title;
-    $(".epg_table tbody > tr").each((index, element) => {
-        const time = $(element).find("td.epg_col_time").text(); // 取得時間
-        const show = $(element).find("td > a").text(); // 取得節目
+    const results = {
+      title: $(".program-title").text().trim(), // 取得標題
+      list: [],
+    };
 
-        results.list.push({
-            time: time.trim(),
-            show: show.trim(),
-        });
-    });
-    results.list.splice(0, 2)
+    results.list = await page.$$eval("tbody .info-table_tr", (rows) =>
+      rows.map((row) => {
+        const time = row.querySelector(".info-table_td")?.innerText ?? ""; // 取得時間
+        const show = row.querySelector(".mobile-title")?.innerText ?? ""; // 取得節目名稱
+        return { time, show };
+      })
+    );
+
     res.json(results);
-    // res.json(req.body);
-})
+  } catch (error) {
+    console.error("Error in /program-list:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+});
 
-app.listen(PORT, () => console.log(`server running on PORT： http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`server running on PORT： http://localhost:${PORT}`)
+);

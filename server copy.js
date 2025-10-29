@@ -1,54 +1,51 @@
-const PORT = 8000;
-import fetch from "node-fetch";
-import * as cheerio from "cheerio";
-import express from "express";
-const app = express();
-// const cors = require("cors");
-// app.use(cors());
+// 中嘉寬頻
+app.post("/program-list", async (req, res) => {
+  try {
+    // console.log('Received request body:', req.body);
 
-const url = "https://www.theguardian.com/uk";
+    if (!req.body.sch_id) {
+      return res.status(400).json({ error: "Missing sch_id in request body" });
+    }
 
-app.get("/", function (req, res) {
-    res.json("This is my webscraper");
-});
+    const url = `https://www.homeplus.net.tw/cable/product-introduce/digital-tv/digital-program-cont/${req.body.sch_id}`;
 
-app.get("/results", async (req, res) => {
-    const response = await fetch(url);
-    const html = await response.text();
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    // 前往目標網站
+    await page.goto(url);
+
+    // 等待頁面載入完成（確保內容已渲染）
+    await page.waitForSelector(".channel_list");
+
+    const html = await page.content();
+
+    // 檢查是否有返回有效的 HTML 內容
+    if (!html) {
+      throw new Error("No content returned from the server");
+    }
+
+    /** cheerio parse html */
     const $ = cheerio.load(html);
-    const articles = [];
+    const results = {
+      title: $(".program-title").text().trim(),
+      list: [],
+    };
 
-    $(".fc-item__title", html).each(function () {
-        //<-- cannot be a function expression
-        const title = $(this).text();
-        const url = $(this).find("a").attr("href");
-        articles.push({
-            title,
-            url,
-        });
+    results.list = await page.$$eval("tbody .info-table_tr", (rows) =>
+      rows.map((row) => {
+        const time = row.querySelector(".info-table_td")?.innerText ?? "";
+        const title = row.querySelector(".mobile-title")?.innerText ?? "";
+        return { time, title };
+      })
+    );
+
+    res.json(results);
+  } catch (error) {
+    console.error("Error in /program-list:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message,
     });
-    res.json(articles);
-    // console.log(articles);
-})
-
-// app.get("/results", (req, res) => {
-//     fetch(url)
-//         .then((response) => {
-//             const html = response.data;
-//             console.log(html);
-//             const $ = cheerio.load(html);
-//             const articles = [];
-
-//             $(".fc-item__title", html).each(function () {
-//                 //<-- cannot be a function expression
-//                 const title = $(this).text();
-//                 const url = $(this).find("a").attr("href");
-//                 articles.push({
-//                     title,
-//                     url,
-//                 });
-//             });
-//             res.json(articles);
-//         })
-//         .catch((err) => console.log(err));
-// });
+  }
+});
