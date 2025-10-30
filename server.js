@@ -65,7 +65,7 @@ app.post("/program-list", async (req, res) => {
     await page.goto(url);
 
     // 等待頁面載入完成（確保內容已渲染）
-    await page.waitForSelector(".channel_list");
+    await page.waitForSelector("tbody", { timeout: 60000 });
 
     const html = await page.content();
 
