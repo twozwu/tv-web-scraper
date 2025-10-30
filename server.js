@@ -4,7 +4,8 @@ import * as cheerio from "cheerio";
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
+
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
@@ -16,7 +17,10 @@ app.get("/", function (req, res) {
 });
 
 app.get("/test", async function (req, res) {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    headless: true,
+  });
   const page = await browser.newPage();
 
   // 前往目標網站
