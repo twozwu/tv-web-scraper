@@ -43,6 +43,7 @@ app.get("/test", async function (req, res) {
 });
 
 app.post("/program-list", async (req, res) => {
+  let browser;
   try {
     if (!req.body.sch_id) {
       return res.status(400).json({ error: "Missing sch_id in request body" });
@@ -50,7 +51,7 @@ app.post("/program-list", async (req, res) => {
 
     const url = `https://www.homeplus.net.tw/cable/product-introduce/digital-tv/digital-program-cont/209-${req.body.sch_id}`;
 
-    const browser = await chromium.launch();
+    browser = await chromium.launch();
 
     // 使用外部瀏覽器版本
     // const browser = await chromium.connect(
