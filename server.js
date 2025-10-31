@@ -51,8 +51,11 @@ app.post("/program-list", async (req, res) => {
 
     const url = `https://www.homeplus.net.tw/cable/product-introduce/digital-tv/digital-program-cont/209-${req.body.sch_id}`;
 
-    browser = await chromium.launch();
-
+    // browser = await chromium.launch();
+    browser = await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
     // 使用外部瀏覽器版本
     // const browser = await chromium.connect(
     //   `wss://production-sfo.browserless.io/chromium/playwright?token=${process.env.BROWSERLESS_TOKEN}`
