@@ -1,10 +1,10 @@
-const PORT = 8000;
 import fetch from "node-fetch";
 import * as cheerio from "cheerio";
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import { chromium } from "playwright-core";
+import { chromium } from "playwright";
+import "dotenv/config";
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -42,27 +42,21 @@ app.get("/test", async function (req, res) {
   res.json(articles);
 });
 
-// 測試用(產生formData)
-// const formData = new URLSearchParams({
-//     day: new Date().toISOString().split('T')[0],
-//     // cont: "not_member",
-//     // day_n: 2,
-//     // grp_id: 1,
-//     sch_id: 17,
-//     act: "select"
-// })
-
 app.post("/program-list", async (req, res) => {
   try {
-    // console.log('Received request body:', req.body);
-
     if (!req.body.sch_id) {
       return res.status(400).json({ error: "Missing sch_id in request body" });
     }
 
     const url = `https://www.homeplus.net.tw/cable/product-introduce/digital-tv/digital-program-cont/209-${req.body.sch_id}`;
 
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch();
+
+    // 使用外部瀏覽器版本
+    // const browser = await chromium.connect(
+    //   `wss://production-sfo.browserless.io/chromium/playwright?token=${process.env.BROWSERLESS_TOKEN}`
+    // );
+
     const page = await browser.newPage();
 
     // 前往目標網站
@@ -100,9 +94,15 @@ app.post("/program-list", async (req, res) => {
       error: "Internal server error",
       message: error.message,
     });
+  } finally {
+    // Ensure the browser is closed after all operations
+    if (browser) {
+      await browser.close();
+    }
   }
 });
 
-app.listen(PORT, () =>
-  console.log(`server running on PORT： http://localhost:${PORT}`)
+const port = process.env.PORT || 8080;
+app.listen(port, () =>
+  console.log(`server running on PORT： http://localhost:${port}`)
 );
