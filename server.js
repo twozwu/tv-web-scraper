@@ -21,7 +21,8 @@ app.get("/test", async function (req, res) {
     // args: ["--no-sandbox", "--disable-setuid-sandbox"],
     // headless: false,
   });
-  const page = await browser.newPage();
+  const context = await browser.newContext();
+  const page = await context.newPage();
 
   // 前往目標網站
   await page.goto("https://news.ycombinator.com/");
@@ -42,6 +43,20 @@ app.get("/test", async function (req, res) {
   res.json(articles);
 });
 
+app.get("/test2", async function (req, res) {
+  const browser = await chromium.connect({
+    wsEndpoint: `wss://production-sfo.browserless.io/chromium/playwright?token=${process.env.BROWSERLESS_TOKEN}`,
+  });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto("https://example.com", { waitUntil: "domcontentloaded" });
+
+  const title = await page.title();
+  await browser.close();
+
+  return res.status(200).json({ title });
+});
+
 app.post("/program-list", async (req, res) => {
   let browser;
   try {
@@ -60,10 +75,8 @@ app.post("/program-list", async (req, res) => {
     // const browser = await chromium.connect(
     //   `wss://production-sfo.browserless.io/chromium/playwright?token=2TMOkxli2szvEgEbebf4874d62f4910ccac32a8dfc850dfd5`
     // );
-    // const context = await browser.newContext();
-    // const page = await context.newPage();
-
-    const page = await browser.newPage();
+    const context = await browser.newContext();
+    const page = await context.newPage();
 
     // 前往目標網站
     await page.goto(url);
