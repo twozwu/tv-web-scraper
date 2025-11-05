@@ -25,7 +25,7 @@ app.get("/test", async function (req, res) {
   const page = await context.newPage();
 
   // 前往目標網站
-  await page.goto("https://news.ycombinator.com/");
+  await page.goto("https://news.ycombinator.com/", { waitUntil: "domcontentloaded" });
 
   // 等待頁面載入完成（確保內容已渲染）
   await page.waitForSelector(".athing");
@@ -57,6 +57,49 @@ app.get("/test2", async function (req, res) {
   return res.status(200).json({ title });
 });
 
+app.post("/", async function (req, res) {
+  res.json("test post");
+});
+
+app.post("/test", async (req, res) => {
+    const targetUrl = req.query.url || "https://example.com";
+    let browser;
+    try {
+        // 啟動 Chromium（headless 模式）
+        browser = await chromium.launch({
+            headless: true,
+            args: [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+            ],
+        });
+
+        const page = await browser.newPage();
+        console.log(`🌐 Visiting: ${targetUrl}`);
+        await page.goto(targetUrl, {
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+        });
+
+        // 截圖輸出為 base64
+        const screenshot = await page.screenshot({ type: "png" });
+        console.log("✅ Screenshot taken.");
+
+        res.writeHead(200, {
+            "Content-Type": "image/png",
+            "Content-Length": screenshot.length,
+        });
+        res.end(screenshot);
+    } catch (err) {
+        console.error("❌ Error during scrape:", err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (browser) await browser.close().catch(() => { });
+    }
+});
+
 app.post("/program-list", async (req, res) => {
   let browser;
   try {
@@ -66,20 +109,23 @@ app.post("/program-list", async (req, res) => {
 
     const url = `https://www.homeplus.net.tw/cable/product-introduce/digital-tv/digital-program-cont/209-${req.body.sch_id}`;
 
-    browser = await chromium.launch();
+    // browser = await chromium.launch();
     // browser = await chromium.launch({
     //   headless: false,
     //   args: ["--no-sandbox", "--disable-setuid-sandbox"],
     // });
     // 使用外部瀏覽器版本
     // const browser = await chromium.connect(
-    //   `wss://production-sfo.browserless.io/chromium/playwright?token=2TMOkxli2szvEgEbebf4874d62f4910ccac32a8dfc850dfd5`
+    //   `wss://production-sfo.browserless.io/chromium/playwright?token=${process.env.BROWSERLESS_TOKEN}`
     // );
+    browser = await chromium.connect({
+      wsEndpoint: `wss://production-sfo.browserless.io/chromium/playwright?token=${process.env.BROWSERLESS_TOKEN}`,
+    });
     const context = await browser.newContext();
     const page = await context.newPage();
 
     // 前往目標網站
-    await page.goto(url);
+    await page.goto(url, { waitUntil: "domcontentloaded" });
 
     // 等待頁面載入完成（確保內容已渲染）
     await page.waitForSelector("table");
@@ -109,6 +155,9 @@ app.post("/program-list", async (req, res) => {
     res.json(results);
   } catch (error) {
     console.error("Error in /program-list:", error);
+    if (browser) {
+      await browser.close();
+    }
     res.status(500).json({
       error: "Internal server error",
       message: error.message,
