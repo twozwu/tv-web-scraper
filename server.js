@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
 import "dotenv/config";
 
 const app = express();
@@ -12,14 +12,14 @@ app.use(express.json());
 app.use(cors());
 app.use(morgan("tiny"));
 
-app.get("/", function (req, res) {
+app.get("/", async function (req, res) {
   res.json("This is my webscraper");
 });
 
 app.get("/test", async function (req, res) {
   const browser = await chromium.launch({
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    headless: true,
+    // args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    // headless: false,
   });
   const page = await browser.newPage();
 
@@ -51,15 +51,17 @@ app.post("/program-list", async (req, res) => {
 
     const url = `https://www.homeplus.net.tw/cable/product-introduce/digital-tv/digital-program-cont/209-${req.body.sch_id}`;
 
-    // browser = await chromium.launch();
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    browser = await chromium.launch();
+    // browser = await chromium.launch({
+    //   headless: false,
+    //   args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    // });
     // 使用外部瀏覽器版本
     // const browser = await chromium.connect(
-    //   `wss://production-sfo.browserless.io/chromium/playwright?token=${process.env.BROWSERLESS_TOKEN}`
+    //   `wss://production-sfo.browserless.io/chromium/playwright?token=2TMOkxli2szvEgEbebf4874d62f4910ccac32a8dfc850dfd5`
     // );
+    // const context = await browser.newContext();
+    // const page = await context.newPage();
 
     const page = await browser.newPage();
 
@@ -67,7 +69,7 @@ app.post("/program-list", async (req, res) => {
     await page.goto(url);
 
     // 等待頁面載入完成（確保內容已渲染）
-    await page.waitForSelector("tbody", { timeout: 60000 });
+    await page.waitForSelector("table");
 
     const html = await page.content();
 
