@@ -64,39 +64,99 @@ app.post("/", async function (req, res) {
 app.post("/test", async (req, res) => {
     const targetUrl = req.query.url || "https://example.com";
     let browser;
+    let page;
+    
     try {
         // 啟動 Chromium（headless 模式）
-        browser = await chromium.launch({
+        // 使用 launchPersistentContext 替代 launch
+        const context = await chromium.launchPersistentContext('/tmp/chrome-user-data', {
             headless: true,
             args: [
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--no-zygote',
+                '--single-process',
+                '--disable-extensions',
+                '--disable-accelerated-2d-canvas',
+                '--disable-webgl',
+                '--disable-gpu-sandbox',
+                '--no-first-run',
+                '--disable-breakpad'
             ],
+            executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+            timeout: 30000,
+            // 添加視窗大小設置
+            viewport: { width: 1920, height: 1080 }
         });
 
-        const page = await browser.newPage();
+        console.log('Browser launched successfully');
+        
+        // 從 context 獲取頁面
+        page = context.pages()[0] || await context.newPage();
+        
         console.log(`🌐 Visiting: ${targetUrl}`);
-        await page.goto(targetUrl, {
-            waitUntil: "domcontentloaded",
-            timeout: 30000,
+        
+        // 設置頁面超時
+        page.setDefaultTimeout(30000);
+        
+        // 設置頁面視窗大小
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        
+        // 啟用請求攔截以優化性能
+        await page.route('**/*', (route) => {
+            const resourceType = route.request().resourceType();
+            // 阻止圖片、字體、樣式表等不必要的請求
+            if (['image', 'font', 'stylesheet', 'media'].includes(resourceType)) {
+                return route.abort();
+            }
+            return route.continue();
         });
+
+        const response = await page.goto(targetUrl, {
+            waitUntil: 'networkidle',
+            timeout: 60000
+        });
+        
+        if (!response || !response.ok()) {
+            throw new Error(`Failed to load page: ${response ? response.status() : 'No response'}`);
+        }
+
+        // 等待額外時間確保頁面完全加載
+        await page.waitForTimeout(2000);
 
         // 截圖輸出為 base64
-        const screenshot = await page.screenshot({ type: "png" });
-        console.log("✅ Screenshot taken.");
+        const screenshot = await page.screenshot({ 
+            type: 'png',
+            fullPage: true
+        });
+        
+        console.log('✅ Screenshot taken successfully');
 
         res.writeHead(200, {
-            "Content-Type": "image/png",
-            "Content-Length": screenshot.length,
+            'Content-Type': 'image/png',
+            'Content-Length': screenshot.length,
         });
         res.end(screenshot);
+        
     } catch (err) {
-        console.error("❌ Error during scrape:", err);
-        res.status(500).json({ error: err.message });
+        console.error('❌ Error during scrape:', err);
+        res.status(500).json({ 
+            error: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
     } finally {
-        if (browser) await browser.close().catch(() => { });
+        try {
+            if (context) {
+                console.log('Closing browser context...');
+                await context.close().catch(e => console.error('Error closing browser context:', e));
+                console.log('Browser context closed');
+            }
+        } catch (e) {
+            console.error('Error in finally block:', e);
+        }
     }
 });
 
