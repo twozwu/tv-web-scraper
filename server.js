@@ -16,10 +16,6 @@ app.get("/", async function (req, res) {
   res.json("This is my webscraper");
 });
 
-app.get("/kaithhealthcheck", async function (req, res) {
-  res.json("kaithhealthcheck");
-});
-
 app.get("/test", async function (req, res) {
   const browser = await chromium.launch({
     // args: ["--no-sandbox", "--disable-setuid-sandbox"],
