@@ -5,6 +5,9 @@ import cors from "cors";
 import morgan from "morgan";
 import { chromium } from "playwright-core";
 import "dotenv/config";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -67,35 +70,75 @@ app.post("/test", async (req, res) => {
     let page;
     
     try {
-        // 啟動 Chromium（headless 模式）
-        // 使用 launchPersistentContext 替代 launch
-        const context = await chromium.launchPersistentContext('/tmp/chrome-user-data', {
+        console.log('Starting browser...');
+        
+        // 確保臨時目錄存在
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
+        const tempDir = join(__dirname, 'temp');
+        
+        if (!existsSync(tempDir)) {
+            mkdirSync(tempDir, { recursive: true });
+        }
+        
+        // 簡化啟動參數
+        const launchOptions = {
             headless: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--disable-software-rasterizer',
-                '--no-zygote',
                 '--single-process',
-                '--disable-extensions',
+                '--no-zygote',
                 '--disable-accelerated-2d-canvas',
                 '--disable-webgl',
-                '--disable-gpu-sandbox',
+                '--disable-software-rasterizer',
                 '--no-first-run',
-                '--disable-breakpad'
+                '--disable-breakpad',
+                '--font-render-hinting=none',
+                '--disable-font-subpixel-positioning',
+                '--disable-libwpe',
+                '--disable-smooth-scrolling',
+                '--disable-threaded-animation',
+                '--disable-threaded-scrolling',
+                '--disable-in-process-stack-traces',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-back-forward-cache'
             ],
-            executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
-            timeout: 30000,
-            // 添加視窗大小設置
-            viewport: { width: 1920, height: 1080 }
-        });
-
-        console.log('Browser launched successfully');
+            ignoreDefaultArgs: ['--enable-automation'],
+            executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+            timeout: 60000, // 增加超時時間到 60 秒
+            viewport: { width: 1920, height: 1080 },
+            env: {
+                ...process.env,
+                // 設置字體緩存目錄
+                FONTCONFIG_PATH: '/dev/null',
+                FONTCONFIG_FILE: '/dev/null',
+                // 禁用字體警告
+                QT_LOGGING_RULES: 'qt.qpa.fonts=0',
+                // 設置臨時目錄
+                TMPDIR: tempDir,
+                TEMP: tempDir,
+                TMP: tempDir
+            }
+        };
         
-        // 從 context 獲取頁面
-        page = context.pages()[0] || await context.newPage();
+        console.log('Launch options:', JSON.stringify(launchOptions, null, 2));
+        
+        // 使用 launch 而不是 launchPersistentContext
+        browser = await chromium.launch(launchOptions);
+        console.log('Browser launched, creating context...');
+        
+        // 創建新的上下文
+        const context = await browser.newContext({
+            viewport: { width: 1920, height: 1080 },
+            ignoreHTTPSErrors: true
+        });
+        
+        console.log('Context created, creating page...');
+        page = await context.newPage();
         
         console.log(`🌐 Visiting: ${targetUrl}`);
         
